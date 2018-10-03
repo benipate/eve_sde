@@ -5,7 +5,7 @@
 start()->
   start("sde").
 start(Root)->
-  start_link(Root)
+  start_link(Root).
 
 %%====================================================================
 %% API
