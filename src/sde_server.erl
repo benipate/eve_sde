@@ -2,6 +2,11 @@
 
 -compile(export_all).
 
+start()->
+  start("sde").
+start(Root)->
+  start_link(Root)
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -9,8 +14,8 @@
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-start_link() ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(Root) ->
+  gen_server:start_link({local, ?MODULE}, ?MODULE, Root, []).
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -21,8 +26,8 @@ start_link() ->
 %%                         {stop, Reason}
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
-init([]) ->
-  Files = filelib:wildcard("sde/*.parsed"),
+init(Root) ->
+  Files = filelib:wildcard(filename:join(Root, "*.parsed")),
   Tables = lists:map(fun(File)->sde:load(File) end, Files),
   {ok, #{tables => Tables}}.
 %%--------------------------------------------------------------------

@@ -97,7 +97,7 @@ create_table(Root, DecodeOpt, {FilePath, {TableName, ETSOptions}, {Type,Spec}})-
 
 get_type(Element)->
   if
-    is_tuple(Element) -> %% Unic key elements in list
+    is_tuple(Element) -> %% Unique key elements in list
       map;
     is_list(Element)-> %% keys duplicated, req key position in spec
       list
