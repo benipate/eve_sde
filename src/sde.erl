@@ -1,99 +1,45 @@
 -module(sde).
 
--compile(export_all).
+
+-export([load/1, create_table/3]).
 
 %% Converter from CCP SDE yaml files to ets table(s)
-
-config()-> %% Example
-  {"sde/", %% sde root path
-  [], %% decode options for
-  %% tables section
-  [
-    %% {FileName, {TableName, ETSOptions}, {Key, TypeConfig}}
-    {"fsd/categoryIDs.yaml", {category_id, []},
-      {map, {[], [{ {'$1', '$2'},
-                [],
-                [
-                  {{'$1',
-                    {map_get, <<"en">>, {map_get, <<"name">>, '$2'}}
-                  }}
-                ]
-      }]}}
-      },
-    {"fsd/typeIDs1.yaml", {type_id, []},
-      {map, {[[<<"description">>,<<"basePrice">>]], [{ '$1',
-                [],
-                ['$1']
-      }]}}
-      },
-    {"fsd/typeIDs2.yaml", {type_id, []},
-      {map, {[[<<"description">>,<<"basePrice">>]], [{ '$1',
-                [],
-                ['$1']
-      }]}}
-      },
-    {"fsd/typeIDs3.yaml", {type_id, []},
-      {map, {[[<<"description">>,<<"basePrice">>]], [{ '$1',
-                [],
-                ['$1']
-      }]}}
-      },
-    {"fsd/typeIDs4.yaml", {type_id, []},
-      {map, {[[<<"description">>,<<"basePrice">>]], [{ '$1',
-                [],
-                ['$1']
-      }]}}
-      },
-    {"fsd/typeIDs5.yaml", {type_id, []},
-      {map, {[[<<"description">>,<<"basePrice">>]], [{ '$1',
-                [],
-                ['$1']
-      }]}}
-      },
-
-      {"bsd/dgmTypeEffects.yaml", {type_effect, []},
-        {list, {[<<"typeID">>, {<<"effectID">>, <<"isDefault">>}], [{ '$1',
-                  [],
-                  ['$1']
-        }]}}
-        },
-      {"bsd/dgmEffects.yaml", {effect, []},
-        {list, {[<<"effectID">>], [{ '$1',
-                  [],
-                  ['$1']
-        }]}}
-        }
-  ]
-  }.
 
 load(File)->
   Res = ets:file2tab(File),
   case Res of
     {ok, Tab}->
-      error_logger:info_msg("~s loaded from ~p",[File, Tab]), Tab;
+      error_logger:info_msg("~s loaded from ~p",[File, Tab]),
+      Tab;
     {error, Reason}->
-       error_logger:info_msg("Error loading ~p as new table(~p)",[File, Reason])
+      error_logger:info_msg("Error loading ~p as new table(~p)",[File, Reason]),
+      {error, Reason}
   end.
 
-parse()->
-  parse(config()).
-parse({Root, DecodeOpt, Tables})->
-  application:start(fast_yaml),
-  lists:foreach(fun(TableSpec)-> create_table(Root, DecodeOpt, TableSpec) end, Tables),
-  error_logger:info_msg("Done",[]).
 
-create_table(Root, DecodeOpt, {FilePath, {TableName, ETSOptions}, {Type,Spec}})->
-  TableName = create_table(Root, FilePath, TableName, ETSOptions),
+create_table(Root, DecodeOpt, #{yaml_file := FilePath,
+      ets_file := TableFile,
+      table := #{ name := TableName, options := ETSOptions},
+      type := Type,
+      post_fun := Fun,
+      spec := Spec})->
+  TableName = create_table(Root, TableFile, TableName, ETSOptions),
   {ok,[List=[Element|_]]} = fast_yaml:decode_from_file(Root++FilePath, DecodeOpt),
   ActualFile = get_type(Element),
   if
     Type == ActualFile ->
       error_logger:info_msg("Loading ~s as ~p",[Root++FilePath,Type]),
       fill_table(Type, TableName, List, Spec),
-      ets:tab2file(TableName, Root++filename:basename(FilePath, ".yaml")++".parsed", [{sync, true}]);
+      post_process(TableName, Fun),
+      ets:tab2file(TableName, filename:join(Root,TableFile), [{sync, true}]);
     true ->
       error_logger:error_msg("~s should be ~p not ~p ",[Root++FilePath, Type, ActualFile])
   end.
+
+post_process(TableName, {Mod,Fun,ArgList})->
+  erlang:apply(Mod,Fun,[TableName|ArgList]);
+post_process(_, undefined)->
+  ok.
 
 get_type(Element)->
   if
@@ -106,7 +52,7 @@ get_type(Element)->
 create_table(Root, FilePath, TableName, ETSOptions)->
   case ets:info(TableName) of
     undefined ->
-      Res = ets:file2tab(Root++filename:basename(FilePath, ".yaml")++".parsed", []),
+      Res = ets:file2tab(filename:join(Root,FilePath), []),
       case Res of
         {ok, Tab}->
           error_logger:info_msg("Updating existing table(loaded from file): ~p",[TableName]),

@@ -5,7 +5,8 @@
   {mod, { eve_sde_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    fast_yaml
    ]},
   {env,[]},
   {modules, []},

@@ -1,0 +1,44 @@
+[
+  {test_eve_sde, [
+      {use_as_sde_server_config, true}, %% use app config as gen_server config
+      {root, "sde/"}, %% sde root path
+      {options, []}, %% decode options for
+        %% tables section
+      {tables, [
+        #{yaml_file => "fsd/categoryIDs.yaml", %% path to yaml file
+          ets_file => "categoryIDs.parsed", %% optional
+          table => #{ name => category_id, options => []}, %% optional
+          type => map, %% map or list
+          %% spec
+          %%  for list type - {MergeKeys, EtsMatchSpec}
+          %%  for map type - {KeysToDrop, EtsMatchSpec}
+          spec => {[],
+            [{ {'$1', '$2'},
+              [],
+              [
+                {{'$1',
+                  {map_get, <<"en">>, {map_get, <<"name">>, '$2'}}
+                }}
+              ]
+            }]}
+        },
+
+        #{
+          yaml_file => "bsd/dgmAttributeTypes.yaml", %% path to yaml file
+          table => #{name => attr}, %% optional
+          type => list, %% map or list
+          spec =>{[<<"attributeID">>], [{ '$1',
+                    [],
+                    ['$1']
+          }]}
+        }
+
+        ]
+      }
+
+  ]},
+
+  {sasl, [
+         {errlog_type, error}
+        ]}
+].
