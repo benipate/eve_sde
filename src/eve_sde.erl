@@ -10,7 +10,7 @@
 -export([get/1, get/2]).
 
 -define(DEFAULT_SDE_SERVER_NAME, test_eve_sde).
--define(SDE_SERVER_NAME, application:get_env(esi_box, config ,?DEFAULT_SDE_SERVER_NAME)).
+-define(SDE_SERVER_NAME, application:get_env(eve_sde, config ,?DEFAULT_SDE_SERVER_NAME)).
 
 
 start()->
