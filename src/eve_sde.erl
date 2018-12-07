@@ -9,7 +9,7 @@
 -export([return_table/1, return_table/2]).
 -export([get/1, get/2]).
 
--define(DEFAULT_SDE_SERVER_NAME, test_eve_sde).
+-define(DEFAULT_SDE_SERVER_NAME, eve_sde).
 -define(SDE_SERVER_NAME, application:get_env(eve_sde, server_name ,?DEFAULT_SDE_SERVER_NAME)).
 
 
