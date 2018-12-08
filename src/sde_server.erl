@@ -38,12 +38,18 @@ init(Name) ->
       case sde:load(TablePath) of
         {error, {read_error,  {file_error,_TableFile,  enoent}}}->
           sde:create_table(Root, Options, TableSpec),
-          Acc#{TableName => TableSpec};
+          Acc#{TableName => TableSpec#{new => true}};
         {error, Reason}->
           Acc;
         Table -> %% loaded from file, noneed to parse yaml
           Acc#{Table => TableSpec#{table => TableNameMap#{ name => Table}}}
     end end, #{}, _Tables),
+    maps:map(fun
+      (TableName,#{final_fun := FinalFun, new := true})->
+        sde:post_process(TableName, FinalFun);
+      (TableName,_Map)->
+        ok
+       end, Tables),
   %%Files = filelib:wildcard(filename:join(Root, "*.parsed")),
   %%Tables = lists:map(fun(File)->sde:load(File) end, Files),
   {ok, #{tables => Tables, options => Options, root => Root}}.
@@ -140,6 +146,7 @@ normalize_table_map(#{yaml_file := FilePath,
       spec := Spec}=TableMap)->
   TableFile = maps:get(ets_file, TableMap, filename:basename(FilePath, ".yaml")),
   Fun = maps:get(post_fun, TableMap, undefined),
+  FinalFun = maps:get(final_fun, TableMap, undefined),
   TableData = case maps:get(table, TableMap, undefined) of
     undefined->
       #{ name => list_to_atom(TableFile), options => []};
@@ -148,4 +155,4 @@ normalize_table_map(#{yaml_file := FilePath,
       ETSOptions = maps:get(options, _Map, []),
       #{ name => TableName, options => ETSOptions}
   end,
-  TableMap#{ets_file => TableFile, table =>  TableData, post_fun => Fun}.
+  TableMap#{ets_file => TableFile, table =>  TableData, post_fun => Fun, final_fun => FinalFun}.

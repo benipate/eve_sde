@@ -1,7 +1,7 @@
 -module(sde).
 
 
--export([load/1, create_table/3]).
+-export([load/1, create_table/3, post_process/2]).
 
 %% Converter from CCP SDE yaml files to ets table(s)
 
@@ -22,18 +22,75 @@ create_table(Root, DecodeOpt, #{yaml_file := FilePath,
       table := #{ name := TableName, options := ETSOptions},
       type := Type,
       post_fun := Fun,
-      spec := Spec})->
+      spec := Spec}=Options)->
   TableName = create_table(Root, TableFile, TableName, ETSOptions),
-  {ok,[List=[Element|_]]} = fast_yaml:decode_from_file(Root++FilePath, DecodeOpt),
+  FullPath = filename:join(Root,FilePath),
+  insert_cycle(DecodeOpt, Options, FullPath),
+  post_process(TableName, Fun),
+  ets:tab2file(TableName, filename:join(Root,TableFile), [{sync, true}]).
+
+insert_cycle(DecodeOpt, #{
+      table := #{ name := TableName},
+      type := map,
+      split_by_records := {_,BinSize},
+      post_fun := Fun,
+      spec := Spec}=Options, FullPath)->
+  {ok,File} = file:open(FullPath, [read,binary]),
+  insert_cycle(DecodeOpt, Options, File, <<>>);
+
+
+insert_cycle(DecodeOpt, #{yaml_file := FilePath,
+    ets_file := TableFile,
+    table := #{ name := TableName, options := ETSOptions},
+    type := Type,
+    post_fun := Fun,
+    spec := Spec}=Options, FullPath)->
+  {ok,Bin} = file:read_file(FullPath),
+  {ok,[List=[Element|_]]} = fast_yaml:decode(Bin, DecodeOpt),
   ActualFile = get_type(Element),
   if
     Type == ActualFile ->
-      error_logger:info_msg("Loading ~s as ~p",[Root++FilePath,Type]),
-      fill_table(Type, TableName, List, Spec),
-      post_process(TableName, Fun),
-      ets:tab2file(TableName, filename:join(Root,TableFile), [{sync, true}]);
+      error_logger:info_msg("Loading ~s as ~p",[FullPath,Type]),
+      fill_table(Type, TableName, List, Spec);
     true ->
-      error_logger:error_msg("~s should be ~p not ~p ",[Root++FilePath, Type, ActualFile])
+      error_logger:error_msg("~s should be ~p not ~p ",[FullPath, Type, ActualFile])
+  end.
+
+insert_cycle(DecodeOpt, #{
+  table := #{ name := TableName},
+  split_by_records := {_,BinSize},
+  spec := Spec}=Options, File, Temp)->
+  case split_parse(File, BinSize, DecodeOpt, Temp) of
+    {NewTemp,none}->
+      insert_cycle(DecodeOpt, Options, File, <<Temp/binary, NewTemp/binary>>);
+    {NewTemp,Parsed}->
+      fill_table(map, TableName, Parsed, Spec),
+      insert_cycle(DecodeOpt, Options, File, NewTemp);
+    Parsed->
+      fill_table(map, TableName, Parsed, Spec)
+  end.
+
+split_parse(File, BinSize, DecodeOpt, Temp)->
+  {ok, Bin} = file:read(File, BinSize),
+  CurrentSize = size(Bin),
+  if
+    CurrentSize >= BinSize ->
+      case re:run(Bin, <<"\\n\\d+:">>, [global]) of
+        nomatch->
+          error_logger:info_msg("Splited nomatch",[]),
+          {<<Temp/binary, Bin/binary>>, none};
+        {match,MathList}->
+          [{Pos,_Len}]=lists:last(MathList),
+          Rem = binary:part(Bin,Pos+1, size(Bin)-(Pos+1)),
+          Parsebale = binary:part(Bin,0, Pos+1),
+          %error_logger:error_msg("Splited bin at ~p",[Pos]),
+          {ok,[Res1]} = fast_yaml:decode(<<Temp/binary, Parsebale/binary>>, DecodeOpt),
+          {Rem, Res1}
+      end;
+    true->
+      error_logger:info_msg("No need to split (~p < ~p)",[CurrentSize, BinSize]),
+      {ok,[Res1]} = fast_yaml:decode(<<Temp/binary, Bin/binary>>, DecodeOpt),
+      Res1
   end.
 
 post_process(TableName, {Mod,Fun,ArgList})->
