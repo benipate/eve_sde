@@ -45,8 +45,10 @@ init(Name) ->
           Acc#{Table => TableSpec#{table => TableNameMap#{ name => Table}}}
     end end, #{}, _Tables),
     maps:map(fun
-      (TableName,#{final_fun := FinalFun, new := true})->
-        sde:post_process(TableName, FinalFun);
+      (TableName,#{final_fun := FinalFun, new := true,
+            ets_file := TableFile})->
+        sde:post_process(TableName, FinalFun),
+        ets:tab2file(TableName, filename:join(Root,TableFile), [{sync, true}]);
       (TableName,_Map)->
         ok
        end, Tables),
